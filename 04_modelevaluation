@@ -1,0 +1,106 @@
+library(tidyverse)
+library(data.table)
+library(ggeffects)
+library(vegan)
+library(Metrics)
+library(palmerpenguins)
+
+load("data/sPlotOpen.RData")
+
+dt_sr <- DT2.oa %>% 
+  distinct(PlotObservationID, Species) %>% 
+  group_by(PlotObservationID) %>% 
+  summarise(sr = n())
+
+dt_sr$sr %>% 
+  hist()
+
+header_sr <- header.oa %>% 
+  left_join(dt_sr) %>% 
+  filter(!is.na(Elevation)) %>% 
+  filter(Releve_area < 2500)
+
+header_sr %>% 
+  glimpse()
+
+
+## Build the model
+glm(sr ~ Elevation, data = header_sr, family = "poisson")
+
+## Split sample
+set.seed(2345)
+header_sr_tr <- sample_frac(tbl = header_sr, size = 0.8)
+
+sel_trte <- header_sr$PlotObservationID %in% header_sr_tr$PlotObservationID
+
+header_sr_te <- header_sr[!sel_trte,]
+
+nrow(header_sr_tr)
+nrow(header_sr_te)
+
+header_sr_te1 <- anti_join(header_sr, header_sr_tr)
+
+identical(header_sr_te, header_sr_te1)
+header_sr_tr$Latitude
+mod1 <- glm(sr ~ poly(Elevation,2)*Releve_area, data = header_sr_tr, family = poisson(link="identity"))
+
+header_sr_te$sr
+sr_pred <- predict(mod1, header_sr_te)
+
+rmse(header_sr_te$sr, sr_pred)
+
+header_sr_te %>% 
+  add_column(sr_pd = sr_pred) %>% 
+  ggplot(aes(x = sr, y = sr_pd))+
+  geom_point()+
+  coord_cartesian(xlim = c(0,140),
+                  ylim = c(0,140))
+
+
+## K-fold cross validation
+
+ngroups <- 4
+v <- 1:nrow(header_sr)
+
+split(v, ceiling(seq_along(v) / round(nrow(header_sr)/ngroups))) %>% 
+  map(~ slice(header_sr, .x))
+
+# k-folds - groups - block
+header_sr %>% 
+  group_by(is_forest) %>% 
+  group_split()
+
+
+## Leave one out
+map(1:nrow(header_sr), function(x){
+  header_sr
+  mod1 <- glm(sr ~ poly(Elevation,2)*Releve_area, data = header_sr[-x,], family = poisson(link="identity"))
+  
+  
+  sr_pred <- predict(mod1, header_sr[x,])
+})
+
+## Bootstrap
+header_sr %>% 
+  sample_frac(size = .8)
+
+header_sr %>% 
+  sample_frac(size = .2)
+
+#### evaluate using the RMSE
+
+rmse(actual, predicted)
+
+###### repeated n times
+
+####### do it again with palmer penguins
+data(penguins)
+data(dune)
+data("dune.env")
+read.csv("data/dataframe_from_accepted_paper_in_ECE_id_2021-07-01211.R1.csv")
+# Formulate the hypothesis
+# Build the model
+# Response curves
+# Evaluate the model
+
+
